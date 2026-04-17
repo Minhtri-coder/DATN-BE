@@ -1,4 +1,3 @@
-// optionalAuth.js
 const jwt = require("jsonwebtoken");
 
 function optionalAuth(req, res, next) {
@@ -18,10 +17,10 @@ function optionalAuth(req, res, next) {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+
         req.user = {
             userId: decoded.userId ?? decoded.id,
-            role: decoded.role,
-            email: decoded.email,
+            role: Number(decoded.role ?? decoded.Role ?? 0),
             ...decoded,
         };
 

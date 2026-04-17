@@ -1,4 +1,3 @@
-// authMiddleware.js
 const jwt = require("jsonwebtoken");
 
 function authMiddleware(req, res, next) {
@@ -20,12 +19,10 @@ function authMiddleware(req, res, next) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 
-        // Chuẩn hoá payload: bạn nên sign token có userId/role
-        // Ví dụ payload: { userId, role, email }
+        // Chuẩn hoá payload
         req.user = {
-            userId: decoded.userId ?? decoded.id, // fallback nếu token cũ đang dùng "id"
-            role: decoded.role,
-            email: decoded.email,
+            userId: decoded.userId ?? decoded.id, // fallback nếu token dùng "id"
+            role: Number(decoded.role ?? decoded.Role ?? 0), // Ép kiểu về Number, mặc định là 0 (user)
             ...decoded,
         };
 
