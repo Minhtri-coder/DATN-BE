@@ -1,5 +1,5 @@
 const Pet = require('../models/Pet');
-const User = require('../models/User'); // Cần User model để Admin tìm ID theo số điện thoại
+const User = require('../models/User');
 
 const petService = {
     // ==========================================
@@ -10,7 +10,7 @@ const petService = {
         const skip = (page - 1) * limit;
 
         const pets = await Pet.find({ UserID: userId })
-            .sort({ createdAt: -1 }) // Thú cưng mới nhất lên đầu
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
             .lean();
@@ -22,18 +22,12 @@ const petService = {
     },
 
     getPetDetailProcess: async (petId, userId = null) => {
-        // Query cơ bản theo PetId
         const query = { _id: petId };
-
-        // Nếu là User gọi (có truyền userId), thêm điều kiện bắt buộc phải là pet của người đó
-        if (userId) {
-            query.UserID = userId;
-        }
+        if (userId) query.UserID = userId;
 
         const pet = await Pet.findOne(query).populate('UserID', 'Name Phone').lean();
         if (!pet) throw new Error("Not Found");
 
-        // Format lại dữ liệu một chút cho đẹp (ví dụ trích xuất OwnerName ra ngoài nếu muốn giống document)
         if (pet.UserID) {
             pet.OwnerName = pet.UserID.Name;
         }
@@ -41,6 +35,7 @@ const petService = {
         return pet;
     },
 
+    // Đã bỏ tham số file, petData.Image giờ chỉ là 1 chuỗi URL
     createPetProcess: async (userId, petData) => {
         const newPet = new Pet({
             ...petData,
@@ -51,11 +46,11 @@ const petService = {
         return newPet;
     },
 
+    // Đã bỏ tham số file
     updatePetProcess: async (petId, userId = null, updateData) => {
         const query = { _id: petId };
         if (userId) query.UserID = userId;
 
-        // Dùng { new: true } để trả về data sau khi update
         const updatedPet = await Pet.findOneAndUpdate(query, updateData, { new: true });
 
         if (!updatedPet) throw new Error("Not Found");
@@ -80,13 +75,11 @@ const petService = {
         const skip = (page - 1) * limit;
         let query = {};
 
-        // Nếu admin muốn lọc danh sách pet theo số điện thoại của khách hàng
         if (phone) {
             const user = await User.findOne({ Phone: phone });
             if (user) {
                 query.UserID = user._id;
             } else {
-                // Nếu tìm SĐT không ra ai, trả về danh sách rỗng luôn cho nhanh
                 return {
                     pets: [],
                     meta: { current_page: page, total_items: 0, total_pages: 0 }
@@ -94,7 +87,6 @@ const petService = {
             }
         }
 
-        // populate để lấy Name của chủ sở hữu
         const pets = await Pet.find(query)
             .populate('UserID', 'Name Phone')
             .sort({ createdAt: -1 })
@@ -102,7 +94,6 @@ const petService = {
             .limit(limit)
             .lean();
 
-        // Map data để gắn OwnerName ra ngoài cấp cao nhất (giống mô tả ở Document)
         const formattedPets = pets.map(pet => ({
             ...pet,
             OwnerName: pet.UserID ? pet.UserID.Name : "Không xác định",
@@ -122,10 +113,9 @@ const petService = {
         };
     },
 
+    // Đã bỏ tham số file
     createAdminPetProcess: async (phone, petData) => {
-        // Admin nhập số điện thoại -> Hệ thống tự dò ra UserID để gắn vào Pet
         const user = await User.findOne({ Phone: phone });
-
         if (!user) throw new Error("User Not Found");
 
         const newPet = new Pet({
