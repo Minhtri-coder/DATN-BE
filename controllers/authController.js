@@ -1,4 +1,4 @@
-const authService = require('../services/authServices');
+const authService = require('../services/authService');
 
 const authController = {
     // [POST] /auth/send-otp
@@ -7,8 +7,10 @@ const authController = {
             const { Phone } = req.body;
 
             // Validate định dạng SĐT (Bắt đầu bằng 0 hoặc +84, kèm 9 số)
+            const PhoneTrim = Phone.trim();
+
             const phoneRegex = /^(0|\+84)[0-9]{9}$/;
-            if (!phoneRegex.test(Phone)) {
+            if (!phoneRegex.test(PhoneTrim)) {
                 return res.status(400).json({ status: false, message: "SĐT không hợp lệ." });
             }
 
