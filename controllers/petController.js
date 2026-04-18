@@ -3,15 +3,73 @@ const { sendSuccess, sendError } = require('../utils/response');
 
 const petController = {
     // ==========================================
-    // TÁC VỤ PHÍA USER
+    // TÁC VỤ PHÍA USER (DRAFT -> PUBLISH FLOW)
     // ==========================================
 
+    // 1. Khởi tạo Draft (Chỉ có 1 bản nháp duy nhất)
+    initDraft: async (req, res) => {
+        try {
+            const userId = req.user.userId;
+
+            const result = await petService.initDraftProcess(userId);
+
+            return sendSuccess(res, 201, "Khởi tạo thú cưng nháp thành công", {
+                ...result.pet,       // Trả về toàn bộ Name, Species, Breed, Image, v.v...
+                IsNewDraft: result.isNewDraft
+            });
+        } catch (error) {
+            return sendError(res, 500, "Lỗi hệ thống khi khởi tạo bản nháp");
+        }
+    },
+
+    // 2. Reset Draft (Xóa bản nháp cũ, tạo bản nháp mới)
+    resetDraft: async (req, res) => {
+        try {
+            const userId = req.user.userId;
+
+            // Service sẽ Hard Delete pet có status DRAFT của user này, và tạo mới
+            const result = await petService.resetDraftProcess(userId);
+
+            return sendSuccess(res, 201, "Reset thú cưng nháp thành công", {
+                PetID: result.petId
+            });
+        } catch (error) {
+            return sendError(res, 500, "Lỗi hệ thống khi reset bản nháp");
+        }
+    },
+
+    // 3. Publish (Chính thức tạo pet từ bản nháp)
+    publishPet: async (req, res) => {
+        try {
+            const userId = req.user.userId;
+            const { petId } = req.params;
+            const { Name, Species, Size } = req.body;
+
+            // Validate khắt khe khi publish
+            if (!Name || !Species || !Size) {
+                return sendError(res, 400, "Vui lòng nhập đầy đủ các thông tin bắt buộc: Tên, Loài, và Kích thước.");
+            }
+
+            // Service sẽ update thông tin vào petId này và chuyển Status -> 'ACTIVE'
+            const publishedPet = await petService.publishPetProcess(petId, userId, req.body);
+
+            return sendSuccess(res, 200, "Thêm thú cưng thành công", publishedPet);
+        } catch (error) {
+            if (error.message === "Not Found") {
+                return sendError(res, 404, "Không tìm thấy bản nháp hợp lệ để xuất bản.");
+            }
+            return sendError(res, 500, "Lỗi hệ thống khi xuất bản thú cưng");
+        }
+    },
+
+    // 4. Lấy danh sách Pet đã tạo
     getUserPets: async (req, res) => {
         try {
             const userId = req.user.userId;
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
 
+            // Chú ý: Service cần query với điều kiện { UserID: userId, Status: 'ACTIVE' }
             const result = await petService.getUserPetsProcess(userId, page, limit);
 
             return sendSuccess(res, 200, "Lấy danh sách thú cưng thành công", result.pets, {
@@ -22,6 +80,7 @@ const petController = {
         }
     },
 
+    // 5. Lấy chi tiết Pet
     getUserPetDetail: async (req, res) => {
         try {
             const userId = req.user.userId;
@@ -37,30 +96,13 @@ const petController = {
         }
     },
 
-    createUserPet: async (req, res) => {
-        try {
-            const userId = req.user.userId;
-            const { Name, Species, Size } = req.body;
-            const file = req.file;
-
-            if (!Name || !Species || !Size) {
-                return sendError(res, 400, "Vui lòng nhập đầy đủ: Tên, Loài, Giống và Kích thước.");
-            }
-
-            const newPet = await petService.createPetProcess(userId, req.body, file);
-            return sendSuccess(res, 201, "Thêm thú cưng thành công", newPet);
-        } catch (error) {
-            return sendError(res, 500, "Lỗi hệ thống");
-        }
-    },
-
+    // 6. Cập nhật Pet (Không xử lý file ảnh ở đây)
     updateUserPet: async (req, res) => {
         try {
             const userId = req.user.userId;
             const { petId } = req.params;
-            const file = req.file;
 
-            const updatedPet = await petService.updatePetProcess(petId, userId, req.body, file);
+            const updatedPet = await petService.updatePetProcess(petId, userId, req.body);
             return sendSuccess(res, 200, "Cập nhật thông tin thành công", updatedPet);
         } catch (error) {
             if (error.message === "Not Found") {
@@ -70,12 +112,15 @@ const petController = {
         }
     },
 
+    // 7. Xóa Pet (Nên là Soft Delete)
     deleteUserPet: async (req, res) => {
         try {
             const userId = req.user.userId;
             const { petId } = req.params;
 
+            // Service: FindByIdAndUpdate(petId, { Status: 'DELETED' })
             await petService.deletePetProcess(petId, userId);
+
             return sendSuccess(res, 200, "Đã xóa thú cưng khỏi danh sách.");
         } catch (error) {
             if (error.message === "Not Found") {
@@ -89,13 +134,18 @@ const petController = {
     // TÁC VỤ PHÍA ADMIN
     // ==========================================
 
+    // ==========================================
+    // TÁC VỤ PHÍA ADMIN
+    // ==========================================
+
     getAdminPets: async (req, res) => {
         try {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 20;
             const phone = req.query.phone;
+            const status = req.query.status; // Hỗ trợ chuỗi "DRAFT,ACTIVE,DELETED"
 
-            const result = await petService.getAdminPetsProcess(page, limit, phone);
+            const result = await petService.getAdminPetsProcess(page, limit, phone, status);
             return sendSuccess(res, 200, "Lấy dữ liệu thành công", result.pets, result.meta);
         } catch (error) {
             return sendError(res, 500, "Lỗi hệ thống");
@@ -105,6 +155,7 @@ const petController = {
     getAdminPetDetail: async (req, res) => {
         try {
             const { petId } = req.params;
+            // Admin gọi nên truyền userId = null
             const pet = await petService.getPetDetailProcess(petId, null);
             return sendSuccess(res, 200, "Chi tiết thú cưng hệ thống", pet);
         } catch (error) {
@@ -118,15 +169,21 @@ const petController = {
     createAdminPet: async (req, res) => {
         try {
             const { Phone, Name, Species } = req.body;
-            const file = req.file;
+            // ĐÃ BỎ: Không còn nhận req.file ở đây nữa
 
             const phoneRegex = /^(0|\+84)[0-9]{9}$/;
             if (!Phone || !phoneRegex.test(Phone) || !Name || !Species) {
                 return sendError(res, 400, "Thông tin không hợp lệ. Vui lòng nhập đúng định dạng SĐT và đầy đủ thông tin thú cưng.");
             }
 
-            const newPet = await petService.createAdminPetProcess(Phone, req.body, file);
-            return sendSuccess(res, 201, `Đã tạo hồ sơ thú cưng cho khách hàng có SĐT ${Phone} thành công.`, newPet);
+            const newPet = await petService.createAdminPetProcess(Phone, req.body);
+
+            // Trả về theo chuẩn ảnh số 3 (API 18)
+            return sendSuccess(res, 201, `Đã tạo hồ sơ thú cưng cho khách hàng có SĐT ${Phone} thành công.`, {
+                PetID: newPet._id,
+                UserID: newPet.UserID,
+                Name: newPet.Name
+            });
         } catch (error) {
             if (error.message === "User Not Found") {
                 return sendError(res, 404, "Không tìm thấy khách hàng với số điện thoại này. Vui lòng kiểm tra lại hoặc tạo tài khoản mới cho khách.");
@@ -138,10 +195,10 @@ const petController = {
     updateAdminPet: async (req, res) => {
         try {
             const { petId } = req.params;
-            const file = req.file;
+            // ĐÃ BỎ: Không còn nhận req.file ở đây nữa
 
-            const updatedPet = await petService.updatePetProcess(petId, null, req.body, file);
-            return sendSuccess(res, 200, "Cập nhật hồ sơ thú cưng thành công.", updatedPet);
+            await petService.updatePetProcess(petId, null, req.body);
+            return sendSuccess(res, 200, "Cập nhật hồ sơ thú cưng thành công.");
         } catch (error) {
             if (error.message === "Not Found") {
                 return sendError(res, 404, "Không tìm thấy hồ sơ để cập nhật.");

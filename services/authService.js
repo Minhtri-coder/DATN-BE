@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-// Import các hàm từ file jwt.js (Lưu ý sửa lại đường dẫn '../utils/jwt' cho đúng với thư mục của bạn)
+
 const {
     signAccessToken,
     signRefreshToken,
@@ -11,7 +11,7 @@ const {
 
 const authService = {
 
-    // 1. GỬI MÃ OTP
+    // 1. GỬI MÃ OTP (phone truyền vào chắc chắn đã là 0...)
     sendOtpProcess: async (phone) => {
         const otpCode = "1234";
         const otpTime = new Date(Date.now() + 3 * 60 * 1000);
@@ -22,6 +22,7 @@ const authService = {
             user = new User({
                 Phone: phone,
                 Name: "New User",
+                // KHÔNG LƯU dummy email nữa, Schema sparse: true sẽ cho phép đi qua
                 otpCode: otpCode,
                 otpTime: otpTime,
                 isActive: false
@@ -35,7 +36,7 @@ const authService = {
         return true;
     },
 
-    // 2. XÁC THỰC MÃ OTP
+    // 2. XÁC THỰC MÃ OTP (phone truyền vào chắc chắn đã là 0...)
     verifyOtpProcess: async (phone, otp) => {
         const user = await User.findOne({ Phone: phone });
 
@@ -47,7 +48,6 @@ const authService = {
         user.otpTime = undefined;
 
         if (user.isActive) {
-            // DÙNG HÀM TỪ JWT UTILS
             const access_token = signAccessToken({ id: user._id, role: user.Role });
             const refresh_token = signRefreshToken({ id: user._id });
 
@@ -59,12 +59,16 @@ const authService = {
                 is_new_user: false,
                 access_token,
                 refresh_token,
-                user: { id: user._id, name: user.Name, phone: user.Phone }
+                user: {
+                    id: user._id,
+                    name: user.Name,
+                    phone: user.Phone,
+                    email: user.Email
+                }
             };
         }
         else {
             await user.save();
-            // DÙNG HÀM TỪ JWT UTILS
             const register_token = signRegisterToken({ phone: user.Phone });
 
             return {
@@ -78,14 +82,15 @@ const authService = {
     registerProcess: async (register_token, name, email, address) => {
         let decoded;
         try {
-            // DÙNG HÀM TỪ JWT UTILS
             decoded = verifyRegisterToken(register_token);
         } catch (err) {
             throw new Error("Phiên đăng ký không hợp lệ hoặc đã hết hạn.");
         }
 
+        // Vì token được cấp ở verifyOtp, phone ở đây đã chuẩn là 0...
         const phone = decoded.phone;
 
+        // CHECK TRÙNG EMAIL BẰNG CODE
         const emailExists = await User.findOne({ Email: email });
         if (emailExists) {
             throw new Error("Email này đã được sử dụng cho một tài khoản khác.");
@@ -95,22 +100,27 @@ const authService = {
         if (!user) throw new Error("Phiên đăng ký không hợp lệ hoặc đã hết hạn.");
 
         user.Name = name;
-        user.Email = email;
+        user.Email = email; // Lúc này mới chính thức gán Email vào DB
         user.Address = address;
         user.isActive = true;
 
-        // DÙNG HÀM TỪ JWT UTILS
         const access_token = signAccessToken({ id: user._id, role: user.Role });
         const refresh_token = signRefreshToken({ id: user._id });
 
         const salt = await bcrypt.genSalt(10);
         user.HashedRefreshToken = await bcrypt.hash(refresh_token, salt);
+
         await user.save();
 
         return {
             access_token,
             refresh_token,
-            user: { id: user._id, name: user.Name, phone: user.Phone }
+            user: {
+                id: user._id,
+                name: user.Name,
+                phone: user.Phone,
+                email: user.Email
+            }
         };
     },
 
@@ -118,7 +128,6 @@ const authService = {
     refreshTokenProcess: async (refresh_token) => {
         let decoded;
         try {
-            // DÙNG HÀM TỪ JWT UTILS
             decoded = verifyRefreshToken(refresh_token);
         } catch (error) {
             if (error.name === "TokenExpiredError") {
@@ -138,7 +147,6 @@ const authService = {
             throw new Error("Refresh token đã bị thu hồi hoặc không chính xác.");
         }
 
-        // DÙNG HÀM TỪ JWT UTILS
         const new_access_token = signAccessToken({ id: user._id, role: user.Role });
         const new_refresh_token = signRefreshToken({ id: user._id });
 

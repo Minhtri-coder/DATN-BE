@@ -1,7 +1,12 @@
 const mongoose = require('mongoose');
 
 const petSchema = new mongoose.Schema({
-    UserID: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    UserID: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true // Thêm index để tìm kiếm pet theo User nhanh hơn
+    },
     Name: { type: String, required: true },
     Species: { type: String, required: true }, // Chó, Mèo...
     Breed: { type: String }, // Giống
@@ -11,7 +16,24 @@ const petSchema = new mongoose.Schema({
     Temperament: { type: String }, // Tính cách
     SpecialNotes: { type: String },
     HealthStatus: { type: String },
-    Image: { type: String }
-}, { timestamps: true });
+    Image: { type: String },
+
+    // TRƯỜNG MỚI: Trạng thái của thú cưng
+    Status: {
+        type: String,
+        enum: ['DRAFT', 'ACTIVE', 'DELETED'],
+        default: 'DRAFT',
+        required: true,
+        index: true
+    }
+}, {
+    timestamps: true
+});
+
+// Compound Index: Đảm bảo hiệu năng cho logic tìm Draft của User
+petSchema.index(
+    { UserID: 1, Status: 1 },
+    { unique: true, partialFilterExpression: { Status: 'DRAFT' } }
+);
 
 module.exports = mongoose.model('Pet', petSchema);
