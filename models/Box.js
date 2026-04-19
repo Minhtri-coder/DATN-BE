@@ -5,7 +5,7 @@ const boxSchema = new mongoose.Schema({
     BoxName: { type: String, required: true },
     SizeCategory: { type: String, enum: ['S', 'M', 'L', 'XL'] },
     Price: { type: Number, required: true },
-    Status: { type: String, enum: ['Available', 'Occupied', 'Maintenance'], default: 'Available' }
+    Status: { type: String, enum: ['Available', 'Occupied', 'Maintenance', 'Deleted'], default: 'Available' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Box', boxSchema);
