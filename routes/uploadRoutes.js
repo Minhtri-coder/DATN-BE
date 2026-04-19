@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const uploadController = require('../controllers/uploadController');
-const optionalAuth = require('../middlewares/optionalAuth');
+const authMiddleware = require('../middlewares/optionalAuth');
 
 // Import hàm sendError từ file response utils của bạn
 const { sendError } = require('../utils/response');
@@ -45,6 +45,6 @@ const uploadMiddleware = (req, res, next) => {
     });
 };
 
-router.post('/', optionalAuth, uploadMiddleware, uploadController.uploadMedia);
+router.post('/', authMiddleware, uploadMiddleware, uploadController.uploadMedia);
 
 module.exports = router;

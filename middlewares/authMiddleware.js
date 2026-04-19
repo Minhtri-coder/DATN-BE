@@ -1,19 +1,20 @@
 const jwt = require("jsonwebtoken");
+const { sendError } = require("../utils/response");
 
 function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!process.env.JWT_ACCESS_SECRET) {
-        return res.status(500).json({ message: "Server thiếu JWT_ACCESS_SECRET." });
+        return sendError(res, 500, "Server thiếu JWT_ACCESS_SECRET.");
     }
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ message: "Vui lòng đăng nhập để tiếp tục." });
+        return sendError(res, 401, "Vui lòng đăng nhập để tiếp tục.");
     }
 
     const token = authHeader.slice("Bearer ".length).trim();
     if (!token) {
-        return res.status(401).json({ message: "Thiếu access token." });
+        return sendError(res, 401, "Thiếu access token.");
     }
 
     try {
@@ -27,15 +28,15 @@ function authMiddleware(req, res, next) {
         };
 
         if (!req.user.userId) {
-            return res.status(401).json({ message: "Token thiếu userId." });
+            return sendError(res, 401, "Token thiếu userId.");
         }
 
         return next();
     } catch (error) {
         if (error?.name === "TokenExpiredError") {
-            return res.status(401).json({ message: "Token đã hết hạn." });
+            return sendError(res, 401, "Phiên đăng nhập đã hết hạn.");
         }
-        return res.status(401).json({ message: "Token không hợp lệ." });
+        return sendError(res, 401, "Token không hợp lệ.");
     }
 }
 
