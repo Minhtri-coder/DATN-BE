@@ -6,30 +6,39 @@ const roomService = {
     // NGHIỆP VỤ PHÒNG (ROOM) DÀNH CHO ADMIN
     // ==========================================
 
-    getRoomsProcess: async (page = 1, limit = 20, status) => {
+    getRoomsProcess: async (page = 1, limit = 20, filters = {}) => {
+        const { status, name, speciesType, behaviorType, tempType, healthSuitability } = filters;
         const query = {};
-        if (status) {
-            // status truyền vào có thể là chuỗi: "DRAFT,DELETED,ACTIVE"
-            query.Status = { $in: status.split(',').map(s => s.trim()) };
-        }
+
+        if (status) query.Status = { $in: status.split(',').map(s => s.trim()) };
+        if (name) query.Name = { $regex: name, $options: 'i' };
+        if (speciesType) query.SpeciesType = speciesType;
+        if (behaviorType) query.BehaviorType = behaviorType;
+        if (tempType) query.TempType = tempType;
+        if (healthSuitability) query.HealthSuitability = healthSuitability;
 
         const skip = (page - 1) * limit;
+
         const rooms = await RoomType.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(Number(limit))
-            .lean(); // Dùng lean() để tối ưu object trả về
+            .lean();
 
         const total = await RoomType.countDocuments(query);
 
-        return { total, page: Number(page), limit: Number(limit), rooms };
+        return {
+            total_items: total,
+            current_page: Number(page),
+            limit: Number(limit),
+            rooms
+        };
     },
 
     getRoomDetailProcess: async (roomId) => {
         const room = await RoomType.findById(roomId).lean();
         if (!room) throw new Error("NOT_FOUND: Không tìm thấy phòng");
 
-        // Lấy số lượng chuồng theo từng loại size thuộc phòng này
         const boxCounts = await Box.aggregate([
             { $match: { RoomTypeID: room._id, Status: { $ne: 'Deleted' } } },
             { $group: { _id: "$SizeCategory", count: { $sum: 1 } } }
@@ -51,19 +60,17 @@ const roomService = {
     },
 
     deleteRoomProcess: async (roomId) => {
-        // Check coi TẤT CẢ các chuồng đã có Status = 'Deleted' hết chưa
-        // Thực hiện bằng cách tìm xem có tồn tại chuồng nào có Status KHÁC 'Deleted' không
         const unDeletedBoxesCount = await Box.countDocuments({
             RoomTypeID: roomId,
             Status: { $ne: 'Deleted' }
         });
 
-        // Nếu lớn hơn 0 nghĩa là vẫn còn chuồng đang Available, Occupied hoặc Maintenance
         if (unDeletedBoxesCount > 0) {
             throw new Error("CONFLICT: Không thể ẩn phòng vì vẫn còn chuồng chưa được xóa (Status khác Deleted). Vui lòng xóa hết chuồng trước.");
         }
 
-        const deletedRoom = await RoomType.findByIdAndUpdate(roomId, { Status: 'DELETED' }, { new: true }).lean();
+        // ĐÃ SỬA: 'DELETED' -> 'Deleted' cho đúng chuẩn Enum
+        const deletedRoom = await RoomType.findByIdAndUpdate(roomId, { Status: 'Deleted' }, { new: true }).lean();
         if (!deletedRoom) throw new Error("NOT_FOUND: Không tìm thấy phòng để ẩn");
 
         return true;
@@ -79,22 +86,20 @@ const roomService = {
 
         let boxesToInsert = [];
 
-        // Chỉ cho phép tăng số lượng chuồng (tạo mới)
         for (const config of configs) {
             const { SizeCategory, Quantity, Price } = config;
 
             if (!Quantity || Quantity <= 0) continue;
 
-            // Đếm số chuồng hiện tại để đặt tên (BoxName) cho không bị trùng
             const currentCount = await Box.countDocuments({ RoomTypeID: roomId, SizeCategory });
 
             for (let i = 1; i <= Quantity; i++) {
                 boxesToInsert.push({
                     RoomTypeID: roomId,
                     BoxName: `${room.Name} - Size ${SizeCategory} - ${currentCount + i}`,
-                    SizeCategory,
+                    SizeCategory: SizeCategory,
                     Price,
-                    Status: 'Available'
+                    Status: 'Available' // Mặc định khi tạo mới
                 });
             }
         }
@@ -108,8 +113,8 @@ const roomService = {
     getBoxesByRoomProcess: async (roomId, size, status) => {
         const query = { RoomTypeID: roomId };
 
-        if (size) query.SizeCategory = size.toUpperCase();
-        if (status) query.Status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+        if (size) query.SizeCategory = size;
+        if (status) query.Status = status;
 
         const boxes = await Box.find(query)
             .sort({ createdAt: -1 })
@@ -137,11 +142,10 @@ const roomService = {
         const box = await Box.findById(boxId);
         if (!box) throw new Error("NOT_FOUND: Không tìm thấy chuồng");
 
-        // LƯU Ý SỬA LỖI JS CỦA BẠN: Không dùng !== với Array được. Phải dùng .includes()
-        // Chỉ cho phép xóa nếu Status đang là Available hoặc Maintenance
+        // Chỉ cho phép xóa mềm (ẩn đi) nếu chuồng đang trống hoặc đang bảo trì
         const allowedStatuses = ['Available', 'Maintenance'];
         if (!allowedStatuses.includes(box.Status)) {
-            throw new Error("CONFLICT: Chỉ được ẩn chuồng khi trạng thái là Available (Trống) hoặc Maintenance (Bảo trì)");
+            throw new Error("CONFLICT: Chỉ được ẩn chuồng khi trạng thái là Available (Trống) hoặc Maintenance (Bảo trì). Không thể xóa chuồng đang có pet ở (Occupied).");
         }
 
         box.Status = 'Deleted';

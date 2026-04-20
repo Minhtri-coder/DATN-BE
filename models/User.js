@@ -34,4 +34,8 @@ const userSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+userSchema.statics.ENUMS = {
+    ROLES: [0, 1, 2]
+};
+
 module.exports = mongoose.model('User', userSchema);

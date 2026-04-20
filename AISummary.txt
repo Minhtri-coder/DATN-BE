@@ -1,0 +1,190 @@
+🏗️ TÀI LIỆU CỐT LÕI DỰ ÁN "PETVILLA" (AI CONTEXT GUIDELINE)
+1. TECH STACK & CƠ SỞ TẦNG
+Framework: Node.js + Express.js (v5.x).
+
+Database: MongoDB Atlas + Mongoose (v9.x).
+
+Security & Auth: JSON Web Token (JWT) + bcryptjs.
+
+Storage: Cloudinary (Lưu ảnh mây) + Multer (Xử lý form-data qua memoryStorage).
+
+2. KIẾN TRÚC LÕI BỐN TẦNG (4-LAYER ARCHITECTURE)
+Luồng dữ liệu đi theo MỘT CHIỀU DUY NHẤT: Router -> Middleware -> Controller -> Service. Tuyệt đối không bypass hoặc trộn lẫn logic giữa các tầng.
+
+TẦNG 1: MODEL (Mongoose) - Định nghĩa Dữ liệu & ENUMs
+Định nghĩa Schema chuẩn mực. Cấu hình timestamps: true.
+Soft Delete: Không xóa vật lý, luôn dùng cờ Status: 'DELETED' hoặc isActive: false.
+Sparse & Unique: Các trường không bắt buộc nhưng cần duy nhất (VD: Email lúc mới OTP) phải có cấu hình sparse: true, unique: true.
+QUY TẮC BẮT BUỘC (ENUMS): Mọi hằng số, trạng thái (Status, Role, Size, Gender...) BẮT BUỘC phải export qua Schema.statics.ENUMS để Controller sử dụng cho việc Validate.
+
+JavaScript
+// Ví dụ chuẩn trong Model
+petSchema.statics.ENUMS = {
+    SIZES: ['S', 'M', 'L', 'XL'],
+    STATUS: ['DRAFT', 'ACTIVE', 'DELETED']
+};
+module.exports = mongoose.model('Pet', petSchema);
+TẦNG 2: SERVICE - Trái tim hệ thống (Business Logic)
+Naming Convention: 100% các hàm trong Service PHẢI có hậu tố Process (VD: publishPetProcess, getAdminPetsProcess). Xuất ra dưới dạng 1 Object.
+
+Nguyên tắc "No HTTP": Service KHÔNG nhận req, res và KHÔNG quan tâm HTTP Status. Nhiệm vụ của nó là xử lý logic DB và Ném lỗi chuẩn định dạng.
+Quy tắc Ném Lỗi (Throw Error FORMAT): Quăng lỗi bằng string có Prefix (Tiền tố) rõ ràng để Tầng Controller tự động map mã HTTP.
+Lỗi tìm kiếm: throw new Error("NOT_FOUND: Không tìm thấy...");
+Lỗi validate logic: throw new Error("BAD_REQUEST: Số điện thoại sai...");
+Lỗi trùng lặp: throw new Error("CONFLICT: Email đã tồn tại...");
+Lỗi xác thực: throw new Error("UNAUTHORIZED: Token hết hạn...");
+Lỗi phân quyền: throw new Error("FORBIDDEN: Không có quyền...");
+Tối ưu hóa Mongoose (CRITICAL):
+Lệnh Đọc (Read): Mọi lệnh find, findOne, findById BẮT BUỘC có đuôi .lean() ở cuối cùng để trả về plain Object, tối ưu RAM. Chỉ bỏ .lean() khi cần gọi .save() ngay sau đó.
+Lọc Field: Luôn dùng .select('field1 field2') để giảm tải data thừa.
+Populate & Flatten: Dùng .populate('RefId'), sau đó phải làm phẳng dữ liệu (map ra object mới, ví dụ gán OwnerName: pet.UserID.Name) trước khi return về Controller.
+Dynamic Query: Bắt buộc dùng let query = {}; và if (filter) query.x = y.
+Regex chuỗi (không phân biệt hoa thường): query.Name = { $regex: name, $options: 'i' }
+Lọc mảng: query.Status = { $in: status.split(',') }
+Phân trang (Pagination): Tính skip = (page - 1) * limit.
+Luồng App Mobile: Trả về { data, hasNextPage }.
+Luồng Admin Web: Trả về { data, meta: { current_page, total_items, total_pages } }.
+TẦNG 3: CONTROLLER - Người điều phối & Gác cổng
+Nhiệm vụ: Nhận req, chuẩn hóa/làm sạch data, validate (check Enum), gọi Service, hứng lỗi và trả về Response. KHÔNG chứa logic truy vấn DB tại đây.
+Data Normalization: Phải trim chuỗi, .toUpperCase() các trường Enum, và đặc biệt phải xóa các key undefined (VD: data[key] === undefined && delete data[key]) trước khi ném cho Service để tránh Mongoose ghi đè mất data cũ khi Update.
+Validate ENUM: Bắt buộc import Model và check !Model.ENUMS.X.includes(value) trước khi gọi Service.
+
+Cấu trúc chuẩn 1 hàm Controller:
+
+JavaScript
+const controllerName = {
+    actionName: async (req, res) => {
+        try {
+            // 1. Lấy và chuẩn hóa dữ liệu
+            // 2. Validate căn bản (Required, Enum)
+            // 3. Gọi service
+            const result = await serviceName.actionNameProcess(...);
+            // 4. Trả về thành công
+            return sendSuccess(res, 200, "Message", result);
+        } catch (error) {
+            // 5. Hứng mọi lỗi đẩy cho Central Error Handler
+            return handleError(res, error); 
+        }
+    }
+}
+TẦNG 4: RESPONSE & ERROR HANDLING - Chuẩn hóa đầu ra
+Cấm tuyệt đối: KHÔNG dùng res.status().json().
+
+Thành công: Dùng sendSuccess(res, statusCode, message, data, meta) từ src/utils/response.js.
+
+Thất bại: Tất cả các catch trong Controller chỉ cần gọi handleError(res, error) từ src/utils/errorHandler.js. File này sẽ đọc Prefix lỗi do Tầng Service ném ra (NOT_FOUND, BAD_REQUEST...) để tự động map ra mã HTTP code tương ứng (404, 400, 409...) và gọi hàm sendError. Nếu lỗi rớt từ Mongoose (ValidationError), map ra 400.
+
+3. MIDDLEWARE & BẢO MẬT (SECURITY)
+Hệ thống sử dụng 3 loại Token quản lý tập trung qua src/utils/jwt.js:
+
+AccessToken (15 phút): Gọi API.
+
+RefreshToken (7 ngày): Lưu DB (Hashed bằng bcryptjs), dùng đổi AccessToken mới.
+
+RegisterToken (5 phút): Trả về sau khi verify OTP SĐT mới, dùng cấp quyền tạm cho API tạo tài khoản.
+
+Core Middlewares (src/middlewares/):
+
+authMiddleware: Bắt buộc đăng nhập. Giải mã Token và gán vào req.user = { userId: String, role: Number }. (Role luôn được ép về Number).
+
+optionalAuth: Cho Guest đi qua, nếu có Token hợp lệ thì mới giải mã gắn vào req.user.
+
+authorizeRoles(...roles): RBAC. Ví dụ authorizeRoles(User.ENUMS.ROLES.ADMIN, User.ENUMS.ROLES.STAFF). Chạy SAU authMiddleware.
+
+validateObjectIdParam(paramName): Bắt buộc kẹp vào các Route có /:id (Ví dụ /:petId). Nó kiểm tra xem ID có đúng định dạng MongoDB ObjectId không (chặn đứng lỗi cast error sập server).
+
+Khối Upload File (upload + multerErrorHandler): Chỉ lưu memory (giới hạn 3MB, loại ảnh webp/png/jpg), lỗi dung lượng tự động map ra sendError(400).
+
+4. QUY TẮC ĐẶT TÊN (NAMING CONVENTION) & CẤU TRÚC FOLDER
+Controller: camelCase + hậu tố (VD: petController.js, authController.js).
+
+Service: camelCase + hậu tố (VD: petService.js, authService.js).
+
+Utils: Các hàm helpers nhỏ gọn (jwt.js, response.js, errorHandler.js).
+
+Models: PascalCase, số ít (VD: User.js, Pet.js, RoomType.js).
+
+📍 LỜI NHẮC CHO CÁC LLM / AI:
+Khi yêu cầu viết code thêm module mới (Ví dụ: Room, Booking, Payment), BẠN PHẢI TUÂN THỦ TỪNG CHỮ trong tài liệu này. Đặc biệt chú ý: .lean() trong Service đọc, Enum export tĩnh trong Model, quăng lỗi có Prefix chuẩn ở Service, và try-catch gọn nhẹ bọc handleError ở Controller. KHÔNG THÊM CÁC THƯ VIỆN BÊN NGOÀI KHÔNG ĐƯỢC CHỈ ĐỊNH. KHÔNG PHÁ VỠ LUỒNG DỮ LIỆU.
+
+BỔ SUNG VÀO PHẦN 1: TECH STACK & CƠ SỞ TẦNG
+(Thêm phần quản lý biến môi trường)
+
+Environment Variables (Biến môi trường): Tuyệt đối KHÔNG hardcode bất kỳ cấu hình nhạy cảm nào trong code (DB URI, JWT Secret, Cloudinary API Keys...). Tất cả phải đọc từ process.env. Nếu cần giá trị mặc định, sử dụng cú pháp fallback (VD: const limit = process.env.PAGE_LIMIT || 10;).
+
+BỔ SUNG VÀO PHẦN 2: KIẾN TRÚC LÕI BỐN TẦNG
+VÀO TẦNG 1: MODEL (Mongoose) - Định nghĩa Dữ liệu
+Tránh rò rỉ dữ liệu (Data Leakage): Không bao giờ trả về Password Hash hoặc RefreshToken trong các truy vấn thông thường. Đối với các field nhạy cảm, thiết lập select: false ngay trong Schema.
+
+JavaScript
+Password: { type: String, required: true, select: false } // Phải dùng .select('+Password') nếu muốn lấy ra.
+Chỉ mục (Indexing) bắt buộc: Phải đánh index (index: true) cho các trường thường xuyên dùng để query (VD: Phone, Email, UserID, Status) để tăng tốc độ truy vấn trên tập dữ liệu lớn.
+
+VÀO TẦNG 2: SERVICE - Trái tim hệ thống
+(Đây là phần RẤT QUAN TRỌNG cho Booking và Payment sắp tới)
+
+Quy tắc Transaction (Giao dịch ACID): Khi một hàm Service thực hiện các lệnh GHI/CẬP NHẬT/XÓA trên 2 Collection khác nhau trở lên (Ví dụ: Vừa tạo Booking, vừa trừ số lượng trống của Room), BẮT BUỘC phải dùng mongoose.startSession() và withTransaction. Nếu 1 tác vụ lỗi, toàn bộ phải rollback để tránh rác dữ liệu.
+
+JavaScript
+// Ví dụ chuẩn Transaction trong Service
+createBookingProcess: async (data) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        // Lệnh 1: Tạo Booking (nhớ truyền { session })
+        const booking = new Booking(data);
+        await booking.save({ session });
+
+        // Lệnh 2: Cập nhật phòng (nhớ truyền { session })
+        await Room.findByIdAndUpdate(data.roomId, { $inc: { available: -1 } }, { session });
+
+        await session.commitTransaction();
+        return booking;
+    } catch (error) {
+        await session.abortTransaction();
+        throw error; // Quăng lỗi ra để Controller bắt
+    } finally {
+        session.endSession();
+    }
+}
+Chống truy vấn rác (Global Soft-Delete Filter): Khi build query, nếu không có yêu cầu đặc biệt từ Admin, BẮT BUỘC phải luôn gài điều kiện lọc bỏ dữ liệu đã xóa: query.Status = { $ne: 'DELETED' } hoặc query.isActive = true.
+
+Giới hạn Populate: Chỉ populate TỐI ĐA 1 cấp (1 level deep). Tuyệt đối không populate lồng nhau (VD: A.populate('B').populate('C')) gây thắt cổ chai DB. Phải dùng .select() bên trong populate để chỉ lấy đúng field cần thiết.
+
+VÀO TẦNG 3: CONTROLLER - Người điều phối
+Phòng thủ Phân trang (Pagination Defense): Đừng bao giờ tin tưởng số page và limit từ Client gửi lên. Luôn ép kiểu về số nguyên dương và đặt mức trần cho limit.
+
+JavaScript
+const page = Math.max(1, parseInt(req.query.page) || 1); // Không cho phép page < 1
+const limit = Math.min(parseInt(req.query.limit) || 10, 100); // Tối đa chỉ cho lấy 100 item/lần
+Phòng thủ Regex (NoSQL Injection): Khi nhận text từ user để cho vào $regex tìm kiếm, phải escape các ký tự đặc biệt nếu cần, hoặc giới hạn độ dài chuỗi để tránh bị tấn công ReDoS.
+
+VÀO TẦNG 4: RESPONSE & ERROR HANDLING
+Bắt lỗi Mongoose cốt lõi trong handleError: File errorHandler.js BẮT BUỘC phải bắt được 2 loại lỗi đặc thù của MongoDB:
+
+err.name === 'ValidationError': Báo lỗi 400 (Thiếu trường, sai định dạng schema).
+
+err.code === 11000: Báo lỗi 409 (Lỗi Duplicate Key - Trùng lặp dữ liệu Unique như SĐT, Email).
+
+BỔ SUNG MỚI: 5. QUY TẮC BẢO MẬT BỔ SUNG (ADVANCED SECURITY)
+Xử lý Thời gian (Timezone): Mọi logic tính toán thời gian trong Service và DB (đặc biệt cho Booking, check-in, check-out) đều PHẢI dùng chuẩn UTC (thông qua Date.now() hoặc thư viện dayjs/moment). Tuyệt đối không dùng giờ Local của Server để tính toán logic. Frontend sẽ tự parse UTC ra giờ Local để hiển thị.
+
+NÂNG CẤP LỜI NHẮC GỬI CHO AI (THAY THẾ ĐOẠN CŨ CỦA BẠN):
+📍 LỜI NHẮC NGHIÊM NGẶT CHO CÁC LLM / AI (AI INSTRUCTIONS):
+Bạn là Senior Backend Architect. Khi nhận yêu cầu viết code (VD: Room, Booking, Payment), BẠN BẮT BUỘC TUÂN THỦ TỪNG CHỮ trong tài liệu này.
+
+Tuyệt đối không: Thêm thư viện bên ngoài nếu không được cho phép, không bypass luồng Dữ liệu (Router -> Middleware -> Controller -> Service). Không dùng res.json() trong Controller. Không viết Query DB trong Controller.
+
+Kiểm tra checklist trước khi output code:
+
+[ ] Service Read có dùng .lean() chưa?
+
+[ ] Enum có được export từ Schema.statics.ENUMS và Controller có check includes() chưa?
+
+[ ] Lỗi trong Service có Prefix (NOT_FOUND:, BAD_REQUEST:) chưa?
+
+[ ] Controller đã dọn dẹp các key undefined của req.body chưa?
+
+[ ] Giao dịch liên quan đến Tiền bạc/Booking có dùng Session Transaction chưa?
+
+Phân tích trước khi code: Hãy suy nghĩ từng bước, xác định các trường dữ liệu, rule validate, rồi mới xuất output code hoàn chỉnh, không cắt bớt.

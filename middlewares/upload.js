@@ -11,7 +11,7 @@ const ALLOWED_MIME = new Set([
 
 const upload = multer({
     storage,
-    limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
+    limits: { fileSize: 20 * 1024 * 1024 }, // 3MB
     fileFilter: (req, file, cb) => {
         if (!ALLOWED_MIME.has(file.mimetype)) {
             const err = new multer.MulterError("LIMIT_UNEXPECTED_FILE", file.fieldname);
