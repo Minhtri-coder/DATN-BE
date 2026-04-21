@@ -22,14 +22,38 @@ const normalizePetData = (body) => {
     return data;
 };
 
-// Hàm tiện ích nội bộ của Controller: Check Enum
-const validatePetEnums = (res, petData) => {
+// Hàm tiện ích nội bộ của Controller: Check Enum và Validate dữ liệu
+const validatePetData = (res, petData) => {
     if (petData.Size && !Pet.ENUMS.SIZES.includes(petData.Size)) {
         return "Kích thước không hợp lệ (Chỉ nhận S, M, L, XL).";
     }
     if (petData.Gender && !Pet.ENUMS.GENDERS.includes(petData.Gender)) {
         return "Giới tính không hợp lệ.";
     }
+
+    // Kiểm tra các trường chuỗi không được phép nhập toàn số
+    const stringFields = {
+        Name: 'Tên',
+        Species: 'Loài',
+        Breed: 'Giống',
+        Temperament: 'Tính cách',
+        SpecialNotes: 'Ghi chú đặc biệt',
+        HealthStatus: 'Tình trạng sức khỏe'
+    };
+
+    for (const [key, label] of Object.entries(stringFields)) {
+        if (petData[key] && /^\d+$/.test(petData[key])) {
+            return `${label} không hợp lệ (không được phép chỉ nhập số).`;
+        }
+    }
+
+    // Kiểm tra cân nặng (nếu có)
+    if (petData.Weight !== undefined) {
+        if (isNaN(petData.Weight) || petData.Weight <= 0) {
+            return "Cân nặng phải là một số lớn hơn 0.";
+        }
+    }
+
     return null;
 };
 
@@ -75,8 +99,8 @@ const petController = {
                 return sendError(res, 400, "Vui lòng nhập đầy đủ các thông tin bắt buộc: Tên, Loài, và Kích thước.");
             }
 
-            const enumError = validatePetEnums(res, petData);
-            if (enumError) return sendError(res, 400, enumError);
+            const validationError = validatePetData(res, petData);
+            if (validationError) return sendError(res, 400, validationError);
 
             const publishedPet = await petService.publishPetProcess(petId, userId, petData);
             return sendSuccess(res, 200, "Thêm thú cưng thành công", publishedPet);
@@ -119,8 +143,8 @@ const petController = {
             const { petId } = req.params;
             const petData = normalizePetData(req.body);
 
-            const enumError = validatePetEnums(res, petData);
-            if (enumError) return sendError(res, 400, enumError);
+            const validationError = validatePetData(res, petData);
+            if (validationError) return sendError(res, 400, validationError);
 
             const updatedPet = await petService.updatePetProcess(petId, userId, petData);
             return sendSuccess(res, 200, "Cập nhật thông tin thành công", updatedPet);
@@ -187,8 +211,8 @@ const petController = {
                 return sendError(res, 400, "Thông tin không hợp lệ. Vui lòng nhập đúng định dạng SĐT và đầy đủ Tên, Loài thú cưng.");
             }
 
-            const enumError = validatePetEnums(res, petData);
-            if (enumError) return sendError(res, 400, enumError);
+            const validationError = validatePetData(res, petData);
+            if (validationError) return sendError(res, 400, validationError);
 
             const newPet = await petService.createAdminPetProcess(Phone, petData);
 
@@ -207,8 +231,8 @@ const petController = {
             const { petId } = req.params;
             const petData = normalizePetData(req.body);
 
-            const enumError = validatePetEnums(res, petData);
-            if (enumError) return sendError(res, 400, enumError);
+            const validationError = validatePetData(res, petData);
+            if (validationError) return sendError(res, 400, validationError);
 
             await petService.updatePetProcess(petId, null, petData);
             return sendSuccess(res, 200, "Cập nhật hồ sơ thú cưng thành công.");

@@ -1,6 +1,18 @@
 const Pet = require('../models/Pet');
 const User = require('../models/User');
 
+const validateServiceData = (petData) => {
+    const stringFields = ['Name', 'Species', 'Breed', 'Temperament', 'SpecialNotes', 'HealthStatus'];
+    for (const field of stringFields) {
+        if (petData[field] && !/([a-zA-Z\p{L}])/u.test(petData[field])) {
+            throw new Error(`BAD_REQUEST: Dữ liệu '${field}' không hợp lệ (phải chứa ít nhất một chữ cái).`);
+        }
+    }
+    if (petData.Weight !== undefined && (isNaN(petData.Weight) || petData.Weight <= 0)) {
+        throw new Error("BAD_REQUEST: Cân nặng phải là một số lớn hơn 0.");
+    }
+};
+
 const petService = {
     // ==========================================
     // NGHIỆP VỤ PHÍA USER (DRAFT -> PUBLISH)
@@ -43,6 +55,7 @@ const petService = {
 
     // 3. Publish Pet
     publishPetProcess: async (petId, userId, petData) => {
+        validateServiceData(petData);
         const query = { _id: petId, UserID: userId, Status: 'DRAFT' };
         const update = { ...petData, Status: 'ACTIVE' };
 
@@ -94,6 +107,7 @@ const petService = {
 
     // 6. Update Pet
     updatePetProcess: async (petId, userId = null, updateData) => {
+        validateServiceData(updateData);
         const query = { _id: petId };
 
         if (userId) {
@@ -136,11 +150,15 @@ const petService = {
             if (user) {
                 query.UserID = user._id;
             } else {
-                return { pets: [], meta: { current_page: page, total_items: 0, total_pages: 0 } };
+                throw new Error("NOT_FOUND: Không tìm thấy khách hàng với số điện thoại này.");
             }
         }
 
-        if (status) query.Status = { $in: status.split(',').map(s => s.trim()) };
+        if (status) {
+            query.Status = { $in: status.split(',').map(s => s.trim()) };
+        } else {
+            query.Status = { $nin: ['DRAFT', 'DELETED'] };
+        }
         if (name) query.Name = { $regex: name, $options: 'i' };
         if (breed) query.Breed = { $regex: breed, $options: 'i' };
         if (species) query.Species = species;
@@ -179,6 +197,7 @@ const petService = {
     },
 
     createAdminPetProcess: async (phone, petData) => {
+        validateServiceData(petData);
         const user = await User.findOne({ Phone: phone }).lean();
         if (!user) throw new Error("NOT_FOUND: Không tìm thấy khách hàng với số điện thoại này.");
 

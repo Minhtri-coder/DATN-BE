@@ -7,13 +7,15 @@ const authRoutes = require("./routes/authRoutes");
 const petRoutes = require("./routes/petRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const roomRoutes = require("./routes/roomRoutes");
+const bookingRoutes = require("./routes/bookingRoutes");
 
 app.use(cors());
 app.use(express.json());
 app.use('/auth', authRoutes);
 app.use('/pet', petRoutes);
 app.use('/upload', uploadRoutes)
-app.use('/room', roomRoutes)
+app.use('/room', roomRoutes);
+app.use('/booking', bookingRoutes);
 
 // health check (tuỳ chọn)
 app.get("/", (req, res) => res.json({ message: "API running" }));
