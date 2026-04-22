@@ -4,7 +4,8 @@ const mongoose = require('mongoose');
 // 1. ĐỊNH NGHĨA CÁC ENUM CONSTANTS
 // ==========================================
 const SIZE_CATEGORIES = ['S', 'M', 'L', 'XL'];
-const STATUS_TYPES = ['Available', 'Occupied', 'Maintenance', 'Deleted'];
+// Thêm 'Reserved' (Sắp có khách / Đã đặt trước) vào danh sách trạng thái
+const STATUS_TYPES = ['Available', 'Reserved', 'Occupied', 'Maintenance', 'Deleted'];
 
 const boxSchema = new mongoose.Schema({
     RoomTypeID: {

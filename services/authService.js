@@ -63,7 +63,8 @@ const authService = {
                 Email: user.Email,
                 Phone: user.Phone,
                 Address: user.Address,
-                AvatarURL: user.AvatarURL
+                AvatarURL: user.AvatarURL,
+                Role: user.Role
             };
 
             return { is_new_user: false, access_token, refresh_token, user: userInfo };

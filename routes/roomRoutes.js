@@ -39,6 +39,9 @@ router.post('/admin/rooms/:roomId/boxes/bulk', roomController.addBoxesBulk);
 // Lấy danh sách chuồng thuộc phòng
 router.get('/admin/rooms/:roomId/boxes', roomController.getBoxesByRoom);
 
+// Thêm 1 chuồng vào phòng cụ thể
+router.post('/admin/rooms/:roomId/boxes', roomController.addSingleBox);
+
 // Lấy chi tiết 1 chuồng
 router.get('/admin/boxes/:boxId', roomController.getBoxDetail);
 

@@ -93,7 +93,7 @@ const roomController = {
     updateRoom: async (req, res) => {
         try {
             const { roomId } = req.params;
-                    let { Name, Description, SpeciesType, BehaviorType, TempType, HealthSuitability, Status } = req.body;
+            let { Name, Description, SpeciesType, BehaviorType, TempType, HealthSuitability, Status } = req.body;
 
             const roomData = {
                 Name: Name?.trim(),
@@ -201,18 +201,71 @@ const roomController = {
         }
     },
 
+    addSingleBox: async (req, res) => {
+        try {
+            const { roomId } = req.params;
+            let { BoxName, SizeCategory, Price, Status } = req.body;
+
+            if (!SizeCategory) {
+                return sendError(res, 400, "SizeCategory là bắt buộc.");
+            }
+
+            if (Price === undefined || Price === null || Number(Price) < 0) {
+                return sendError(res, 400, "Price là bắt buộc và phải >= 0.");
+            }
+
+            // Chuẩn hóa dữ liệu
+            const boxData = {
+                BoxName: BoxName?.trim(),
+                SizeCategory: SizeCategory.trim().toUpperCase(),
+                Price: Number(Price),
+                Status: Status
+                    ? Status.trim().charAt(0).toUpperCase() + Status.trim().slice(1).toLowerCase()
+                    : 'Available'
+            };
+
+            // Validate enum
+            if (!Box.ENUMS.SIZE_CATEGORIES.includes(boxData.SizeCategory)) {
+                return sendError(
+                    res,
+                    400,
+                    `SizeCategory không hợp lệ. Cho phép: ${Box.ENUMS.SIZE_CATEGORIES.join(', ')}`
+                );
+            }
+
+            if (!Box.ENUMS.STATUS_TYPES.includes(boxData.Status)) {
+                return sendError(
+                    res,
+                    400,
+                    `Status không hợp lệ. Cho phép: ${Box.ENUMS.STATUS_TYPES.join(', ')}`
+                );
+            }
+
+            const data = await roomService.addSingleBoxProcess(roomId, boxData);
+            return sendSuccess(res, 201, "Thêm 1 chuồng thành công", data);
+        } catch (error) {
+            return handleError(res, error);
+        }
+    },
+
     getBoxesByRoom: async (req, res) => {
         try {
             const { roomId } = req.params;
-            const size = req.query.size?.trim().toUpperCase();
+            const page = Number(req.query.page) || 1;
+            const limit = Number(req.query.limit) || 20;
+
+            const filters = {
+                size: req.query.size?.trim().toUpperCase(),
+                name: req.query.name?.trim(),
+                status: req.query.status?.trim()
+            };
 
             // Chuẩn hóa Status: Chữ cái đầu viết hoa, còn lại viết thường
-            let status = req.query.status?.trim();
-            if (status) {
-                status = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+            if (filters.status) {
+                filters.status = filters.status.charAt(0).toUpperCase() + filters.status.slice(1).toLowerCase();
             }
 
-            const data = await roomService.getBoxesByRoomProcess(roomId, size, status);
+            const data = await roomService.getBoxesByRoomProcess(roomId, page, limit, filters);
             return sendSuccess(res, 200, "Lấy danh sách chuồng thành công", data);
         } catch (error) {
             return handleError(res, error);

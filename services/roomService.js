@@ -115,17 +115,68 @@ const roomService = {
         return createdBoxes;
     },
 
-    getBoxesByRoomProcess: async (roomId, size, status) => {
+    getBoxesByRoomProcess: async (roomId, page = 1, limit = 20, filters = {}) => {
+        const { size, status, name } = filters;
         const query = { RoomTypeID: roomId };
 
-        if (size) query.SizeCategory = size;
-        if (status) query.Status = status;
+        // 1. Tìm kiếm theo tên chuồng
+        if (name) {
+            query.BoxName = { $regex: name, $options: 'i' };
+        }
+
+        // 2. Lọc theo kích thước
+        if (size) {
+            query.SizeCategory = size;
+        }
+
+        // 3. Lọc theo trạng thái (Logic yêu cầu)
+        if (status) {
+            // Nếu client truyền status cụ thể (kể cả 'Deleted'), lấy đúng status đó
+            query.Status = status;
+        } else {
+            // Mặc định không truyền: Bỏ qua các chuồng đã bị xóa mềm
+            query.Status = { $ne: 'Deleted' };
+        }
+
+        const skip = (page - 1) * Number(limit);
 
         const boxes = await Box.find(query)
             .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Number(limit))
             .lean();
 
-        return boxes;
+        const total = await Box.countDocuments(query);
+
+        return {
+            total_items: total,
+            current_page: Number(page),
+            limit: Number(limit),
+            boxes
+        };
+    },
+
+    addSingleBoxProcess: async (roomId, boxData) => {
+        const room = await RoomType.findById(roomId).lean();
+        if (!room) throw new Error("NOT_FOUND: Không tìm thấy phòng");
+
+        const { BoxName, SizeCategory, Price, Status } = boxData;
+
+        const currentCount = await Box.countDocuments({
+            RoomTypeID: roomId,
+            SizeCategory
+        });
+
+        const newBox = new Box({
+            RoomTypeID: roomId,
+            BoxName: BoxName?.trim() || `${room.Name} - Size ${SizeCategory} - ${currentCount + 1}`,
+            SizeCategory,
+            Price,
+            Status: Status || 'Available'
+        });
+
+        const savedBox = await newBox.save();
+        return savedBox.toObject();
     },
 
     getBoxDetailProcess: async (boxId) => {
