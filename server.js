@@ -9,7 +9,7 @@ const uploadRoutes = require("./routes/uploadRoutes");
 const roomRoutes = require("./routes/roomRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 
-app.use(cors());
+app.use(cors({}));
 app.use(express.json());
 app.use('/auth', authRoutes);
 app.use('/pet', petRoutes);

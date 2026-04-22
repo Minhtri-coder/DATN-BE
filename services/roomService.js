@@ -10,7 +10,12 @@ const roomService = {
         const { status, name, speciesType, behaviorType, tempType, healthSuitability } = filters;
         const query = {};
 
-        if (status) query.Status = { $in: status.split(',').map(s => s.trim()) };
+        if (status) {
+            query.Status = { $in: status.split(',').map(s => s.trim()) };
+        } else {
+            // Mặc định chỉ lấy Available và Maintenance, bỏ qua Deleted
+            query.Status = { $nin: ['Deleted'] };
+        }
         if (name) query.Name = { $regex: name, $options: 'i' };
         if (speciesType) query.SpeciesType = speciesType;
         if (behaviorType) query.BehaviorType = behaviorType;

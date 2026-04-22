@@ -14,13 +14,13 @@ router.use("/admin", authMiddleware, authorizeRoles(2));
 // ==========================================
 
 // Lấy danh sách phòng
-router.get('/admin/', roomController.getRooms);
+router.get('/admin', roomController.getRooms);
 
 // Lấy chi tiết phòng (kèm theo tổng số chuồng bên trong)
 router.get('/admin/:roomId', roomController.getRoomDetail);
 
 // Tạo phòng mới
-router.post('/admin/', roomController.createRoom);
+router.post('/admin', roomController.createRoom);
 
 // Sửa phòng
 router.put('/admin/:roomId', roomController.updateRoom);

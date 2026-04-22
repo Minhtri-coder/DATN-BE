@@ -93,7 +93,7 @@ const roomController = {
     updateRoom: async (req, res) => {
         try {
             const { roomId } = req.params;
-            let { Name, Description, SpeciesType, BehaviorType, TempType, HealthSuitability } = req.body;
+                    let { Name, Description, SpeciesType, BehaviorType, TempType, HealthSuitability, Status } = req.body;
 
             const roomData = {
                 Name: Name?.trim(),
@@ -101,7 +101,8 @@ const roomController = {
                 SpeciesType: SpeciesType?.trim(),
                 BehaviorType: BehaviorType?.trim(),
                 TempType: TempType?.trim(),
-                HealthSuitability: HealthSuitability?.trim()
+                HealthSuitability: HealthSuitability?.trim(),
+                Status: Status?.trim()
             };
 
             Object.keys(roomData).forEach(key => roomData[key] === undefined && delete roomData[key]);
@@ -118,6 +119,9 @@ const roomController = {
             }
             if (roomData.HealthSuitability && !RoomType.ENUMS.HEALTH_SUITABILITY.includes(roomData.HealthSuitability)) {
                 return sendError(res, 400, "HealthSuitability không hợp lệ.");
+            }
+            if (roomData.Status && !RoomType.ENUMS.STATUS_TYPES.includes(roomData.Status)) {
+                return sendError(res, 400, `Status không hợp lệ. Cho phép: ${RoomType.ENUMS.STATUS_TYPES.join(', ')}`);
             }
 
             const data = await roomService.updateRoomProcess(roomId, roomData);

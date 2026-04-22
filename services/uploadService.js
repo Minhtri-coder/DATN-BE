@@ -1,10 +1,12 @@
 const User = require('../models/User');
 const Pet = require('../models/Pet');
+const RoomType = require('../models/RoomType');
 const cloudinaryService = require('./cloudinaryService');
 
 const ENTITY_CONFIG = {
     profile: { folder: "app/profiles", model: User, imageField: 'AvatarURL', isMultiple: false, allowedRoles: [0, 1, 2], ownerField: '_id' },
     pet: { folder: "app/pets", model: Pet, imageField: 'Image', isMultiple: false, allowedRoles: [0, 1, 2], ownerField: 'UserID' },
+    room: { folder: "app/rooms", model: RoomType, imageField: 'Images', isMultiple: true, allowedRoles: [1, 2], ownerField: null },
 };
 
 const uploadService = {

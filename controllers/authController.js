@@ -38,6 +38,18 @@ const authController = {
         }
     },
 
+    // [POST] /auth/admin/send-otp
+    sendAdminOtp: async (req, res) => {
+        try {
+            const normalizedPhone = formatPhone(req.body.Phone);
+            await authService.sendAdminOtpProcess(normalizedPhone);
+
+            return sendSuccess(res, 200, "Đã gửi mã OTP thành công.", { test_otp: "1234" });
+        } catch (error) {
+            return handleError(res, error);
+        }
+    },
+
     // [POST] /auth/verify-otp
     verifyOtp: async (req, res) => {
         try {
