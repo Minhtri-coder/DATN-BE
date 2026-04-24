@@ -1,11 +1,13 @@
 const RoomType = require('../models/RoomType');
 const Box = require('../models/Box');
+const { paginateQuery } = require('../utils/paginationHelper');
 
 const roomService = {
     // ==========================================
     // NGHIỆP VỤ PHÒNG (ROOM) DÀNH CHO ADMIN
     // ==========================================
 
+    // Đã tối ưu bằng paginateQuery
     getRoomsProcess: async (page = 1, limit = 20, filters = {}) => {
         const { status, name, speciesType, behaviorType, tempType, healthSuitability } = filters;
         const query = {};
@@ -13,31 +15,18 @@ const roomService = {
         if (status) {
             query.Status = { $in: status.split(',').map(s => s.trim()) };
         } else {
-            // Mặc định chỉ lấy Available và Maintenance, bỏ qua Deleted
             query.Status = { $nin: ['Deleted'] };
         }
+
         if (name) query.Name = { $regex: name, $options: 'i' };
         if (speciesType) query.SpeciesType = speciesType;
         if (behaviorType) query.BehaviorType = behaviorType;
         if (tempType) query.TempType = tempType;
         if (healthSuitability) query.HealthSuitability = healthSuitability;
 
-        const skip = (page - 1) * limit;
-
-        const rooms = await RoomType.find(query)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(Number(limit))
-            .lean();
-
-        const total = await RoomType.countDocuments(query);
-
-        return {
-            total_items: total,
-            current_page: Number(page),
-            limit: Number(limit),
-            rooms
-        };
+        return await paginateQuery(RoomType, query, page, limit, {
+            dataKey: 'rooms'
+        });
     },
 
     getRoomDetailProcess: async (roomId) => {
@@ -74,7 +63,6 @@ const roomService = {
             throw new Error("CONFLICT: Không thể ẩn phòng vì vẫn còn chuồng chưa được xóa (Status khác Deleted). Vui lòng xóa hết chuồng trước.");
         }
 
-        // ĐÃ SỬA: 'DELETED' -> 'Deleted' cho đúng chuẩn Enum
         const deletedRoom = await RoomType.findByIdAndUpdate(roomId, { Status: 'Deleted' }, { new: true }).lean();
         if (!deletedRoom) throw new Error("NOT_FOUND: Không tìm thấy phòng để ẩn");
 
@@ -115,45 +103,23 @@ const roomService = {
         return createdBoxes;
     },
 
+    // Đã tối ưu bằng paginateQuery
     getBoxesByRoomProcess: async (roomId, page = 1, limit = 20, filters = {}) => {
         const { size, status, name } = filters;
         const query = { RoomTypeID: roomId };
 
-        // 1. Tìm kiếm theo tên chuồng
-        if (name) {
-            query.BoxName = { $regex: name, $options: 'i' };
-        }
+        if (name) query.BoxName = { $regex: name, $options: 'i' };
+        if (size) query.SizeCategory = size;
 
-        // 2. Lọc theo kích thước
-        if (size) {
-            query.SizeCategory = size;
-        }
-
-        // 3. Lọc theo trạng thái (Logic yêu cầu)
         if (status) {
-            // Nếu client truyền status cụ thể (kể cả 'Deleted'), lấy đúng status đó
             query.Status = status;
         } else {
-            // Mặc định không truyền: Bỏ qua các chuồng đã bị xóa mềm
             query.Status = { $ne: 'Deleted' };
         }
 
-        const skip = (page - 1) * Number(limit);
-
-        const boxes = await Box.find(query)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(Number(limit))
-            .lean();
-
-        const total = await Box.countDocuments(query);
-
-        return {
-            total_items: total,
-            current_page: Number(page),
-            limit: Number(limit),
-            boxes
-        };
+        return await paginateQuery(Box, query, page, limit, {
+            dataKey: 'boxes'
+        });
     },
 
     addSingleBoxProcess: async (roomId, boxData) => {
@@ -198,7 +164,6 @@ const roomService = {
         const box = await Box.findById(boxId);
         if (!box) throw new Error("NOT_FOUND: Không tìm thấy chuồng");
 
-        // Chỉ cho phép xóa mềm (ẩn đi) nếu chuồng đang trống hoặc đang bảo trì
         const allowedStatuses = ['Available', 'Maintenance'];
         if (!allowedStatuses.includes(box.Status)) {
             throw new Error("CONFLICT: Chỉ được ẩn chuồng khi trạng thái là Available (Trống) hoặc Maintenance (Bảo trì). Không thể xóa chuồng đang có pet ở (Occupied).");

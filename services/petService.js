@@ -1,6 +1,8 @@
 const Pet = require('../models/Pet');
 const User = require('../models/User');
+const { paginateQuery, formatPagination } = require('../utils/paginationHelper');
 
+// Hàm tiện ích: Validate Data
 const validateServiceData = (petData) => {
     const stringFields = ['Name', 'Species', 'Breed', 'Behavior', 'SpecialNotes', 'HealthStatus'];
     for (const field of stringFields) {
@@ -9,16 +11,20 @@ const validateServiceData = (petData) => {
         }
     }
 
-    // ĐÃ SỬA: Chặn Cân nặng âm, bằng 0, hoặc lớn hơn 200
     if (petData.Weight !== undefined && (isNaN(petData.Weight) || petData.Weight <= 0 || petData.Weight > 200)) {
         throw new Error("BAD_REQUEST: Cân nặng phải lớn hơn 0 và tối đa 200 kg.");
     }
 };
 
+const toPascalCase = (str) => {
+    if (!str) return str;
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
+
 const petService = {
     // 1. Init Draft
     initDraftProcess: async (userId) => {
-        let draftPet = await Pet.findOne({ UserID: userId, Status: 'Draft' }).lean(); // PascalCase
+        let draftPet = await Pet.findOne({ UserID: userId, Status: 'Draft' }).lean();
 
         if (draftPet) {
             return { pet: draftPet, isNewDraft: false };
@@ -27,8 +33,8 @@ const petService = {
         const newDraft = new Pet({
             UserID: userId,
             Name: "_",
-            Species: "Dog", // ĐÃ SỬA: Tránh lỗi required enum
-            Status: 'Draft' // PascalCase
+            Species: "Dog",
+            Status: 'Draft'
         });
 
         const savedPet = await newDraft.save();
@@ -37,7 +43,7 @@ const petService = {
 
     // 2. Reset Draft
     resetDraftProcess: async (userId) => {
-        const deletedDraft = await Pet.findOneAndDelete({ UserID: userId, Status: 'Draft' }).lean(); // PascalCase
+        const deletedDraft = await Pet.findOneAndDelete({ UserID: userId, Status: 'Draft' }).lean();
 
         if (!deletedDraft) {
             throw new Error("NOT_FOUND: Bạn không có bản nháp nào đang xử lý để đặt lại.");
@@ -49,8 +55,8 @@ const petService = {
     // 3. Publish Pet
     publishPetProcess: async (petId, userId, petData) => {
         validateServiceData(petData);
-        const query = { _id: petId, UserID: userId, Status: 'Draft' }; // PascalCase
-        const update = { ...petData, Status: 'Active' }; // PascalCase
+        const query = { _id: petId, UserID: userId, Status: 'Draft' };
+        const update = { ...petData, Status: 'Active' };
 
         const publishedPet = await Pet.findOneAndUpdate(query, update, { new: true }).lean();
 
@@ -58,22 +64,14 @@ const petService = {
         return publishedPet;
     },
 
-    // 4. Get User Pets
-    getUserPetsProcess: async (userId, page, limit) => {
-        const skip = (page - 1) * limit;
-        const query = { UserID: userId, Status: 'Active' }; // PascalCase
+    // 4. Get User Pets (Đã tối ưu bằng paginateQuery)
+    getUserPetsProcess: async (userId, page = 1, limit = 10) => {
+        const query = { UserID: userId, Status: 'Active' };
 
-        const pets = await Pet.find(query)
-            .select('_id Name Species Breed Image Gender Size')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .lean();
-
-        const totalPets = await Pet.countDocuments(query);
-        const hasNextPage = (skip + pets.length) < totalPets;
-
-        return { pets, hasNextPage };
+        return await paginateQuery(Pet, query, page, limit, {
+            select: '_id Name Species Breed Image Gender Size',
+            dataKey: 'pets'
+        });
     },
 
     // 5. Get Pet Detail
@@ -82,7 +80,7 @@ const petService = {
 
         if (userId) {
             query.UserID = userId;
-            query.Status = { $ne: 'Deleted' }; // PascalCase
+            query.Status = { $ne: 'Deleted' };
         }
 
         const pet = await Pet.findOne(query).populate('UserID', 'Name Phone').lean();
@@ -104,7 +102,7 @@ const petService = {
 
         if (userId) {
             query.UserID = userId;
-            query.Status = { $ne: 'Deleted' }; // PascalCase
+            query.Status = { $ne: 'Deleted' };
         }
 
         const updatedPet = await Pet.findOneAndUpdate(query, updateData, { new: true }).lean();
@@ -118,16 +116,15 @@ const petService = {
         const query = { _id: petId };
         if (userId) query.UserID = userId;
 
-        const deletedPet = await Pet.findOneAndUpdate(query, { Status: 'Deleted' }, { new: true }).lean(); // PascalCase
+        const deletedPet = await Pet.findOneAndUpdate(query, { Status: 'Deleted' }, { new: true }).lean();
 
         if (!deletedPet) throw new Error("NOT_FOUND: Không tìm thấy thú cưng để xóa.");
         return true;
     },
 
-    // 8. Admin Get Pets
-    getAdminPetsProcess: async (page, limit, filters) => {
+    // 8. Admin Get Pets (Dùng formatPagination vì cần map dữ liệu)
+    getAdminPetsProcess: async (page = 1, limit = 20, filters = {}) => {
         const { phone, status, name, species, breed, size, gender } = filters;
-        const skip = (page - 1) * limit;
         let query = {};
 
         if (phone) {
@@ -142,7 +139,7 @@ const petService = {
         if (status) {
             query.Status = { $in: status.split(',').map(s => toPascalCase(s.trim())) };
         } else {
-            query.Status = { $nin: ['Draft', 'Deleted'] }; // PascalCase
+            query.Status = { $nin: ['Draft', 'Deleted'] };
         }
 
         if (name) query.Name = { $regex: name, $options: 'i' };
@@ -151,13 +148,16 @@ const petService = {
         if (size) query.Size = size;
         if (gender) query.Gender = gender;
 
+        const skip = (Math.max(1, page) - 1) * limit;
+
         const pets = await Pet.find(query)
             .populate('UserID', 'Name Phone')
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(limit)
+            .limit(Number(limit))
             .lean();
 
+        // Xử lý logic map dữ liệu
         const formattedPets = pets.map(pet => {
             const formatted = {
                 ...pet,
@@ -169,16 +169,9 @@ const petService = {
         });
 
         const totalItems = await Pet.countDocuments(query);
-        const totalPages = Math.ceil(totalItems / limit);
 
-        return {
-            pets: formattedPets,
-            meta: {
-                current_page: page,
-                total_items: totalItems,
-                total_pages: totalPages
-            }
-        };
+        // Trả về chuẩn phân trang
+        return formatPagination(formattedPets, totalItems, page, limit, 'pets');
     },
 
     // 9. Admin Create Pet
@@ -190,7 +183,7 @@ const petService = {
         const newPet = new Pet({
             ...petData,
             UserID: user._id,
-            Status: 'Active' // PascalCase
+            Status: 'Active'
         });
 
         await newPet.save();

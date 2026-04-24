@@ -8,6 +8,7 @@ const petRoutes = require("./routes/petRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const roomRoutes = require("./routes/roomRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 app.use(cors({}));
 app.use(express.json());
@@ -16,6 +17,7 @@ app.use('/pet', petRoutes);
 app.use('/upload', uploadRoutes)
 app.use('/room', roomRoutes);
 app.use('/booking', bookingRoutes);
+app.use('/user', userRoutes);
 
 // health check (tuỳ chọn)
 app.get("/", (req, res) => res.json({ message: "API running" }));

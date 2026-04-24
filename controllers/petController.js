@@ -42,7 +42,8 @@ const normalizePetData = (body) => {
         Gender: toPascalCase(body.Gender?.trim()), // PascalCase
         Behavior: toPascalCase(body.Behavior?.trim()), // PascalCase
         SpecialNotes: body.SpecialNotes?.trim(),
-        HealthStatus: toPascalCase(body.HealthStatus?.trim()) // PascalCase
+        HealthStatus: toPascalCase(body.HealthStatus?.trim()), // PascalCase
+        Status: toPascalCase(body.Status?.trim()) // ĐÃ SỬA: Thêm dòng này để nhận Status từ Client
     };
 
     // Lọc bỏ các key undefined để Mongoose không ghi đè mất data cũ
@@ -67,6 +68,10 @@ const validatePetData = (res, petData) => {
     if (petData.HealthStatus && !Pet.ENUMS.HEALTH_STATUSES.includes(petData.HealthStatus)) {
         return "Tình trạng sức khỏe không hợp lệ.";
     }
+    // ĐÃ SỬA: Bổ sung validate cho Status
+    if (petData.Status && !Pet.ENUMS.STATUS.includes(petData.Status)) {
+        return "Trạng thái (Status) không hợp lệ.";
+    }
 
     // Kiểm tra các trường chuỗi không được phép nhập toàn số
     const stringFields = {
@@ -84,7 +89,7 @@ const validatePetData = (res, petData) => {
         }
     }
 
-    // ĐÃ SỬA: Chặn Cân nặng âm, bằng 0, hoặc lớn hơn 200
+    // Chặn Cân nặng âm, bằng 0, hoặc lớn hơn 200
     if (petData.Weight !== undefined) {
         if (isNaN(petData.Weight) || petData.Weight <= 0 || petData.Weight > 200) {
             return "Cân nặng phải lớn hơn 0 và tối đa 200 kg.";
@@ -162,6 +167,7 @@ const petController = {
             return handleError(res, error);
         }
     },
+
 
     getUserPetDetail: async (req, res) => {
         try {
