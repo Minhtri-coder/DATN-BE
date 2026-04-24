@@ -132,7 +132,8 @@ const petService = {
 
     // 8. Admin Get Pets (Dùng formatPagination vì cần map dữ liệu)
     getAdminPetsProcess: async (page = 1, limit = 20, filters = {}) => {
-        const { phone, status, name, species, breed, size, gender } = filters;
+        // --- ĐÃ SỬA: Hứng thêm behavior và healthStatus ---
+        const { phone, status, name, species, breed, size, gender, behavior, healthStatus } = filters;
         let query = {};
 
         if (phone) {
@@ -147,7 +148,7 @@ const petService = {
         if (status) {
             query.Status = { $in: status.split(',').map(s => toPascalCase(s.trim())) };
         } else {
-            query.Status = { $nin: ['Draft', 'Deleted'] };
+            query.Status = { $nin: ['Draft', 'Deleted', 'DRAFT', 'DELETED', 'draft', 'deleted'] };
         }
 
         if (name) query.Name = { $regex: name, $options: 'i' };
@@ -155,6 +156,10 @@ const petService = {
         if (species) query.Species = species;
         if (size) query.Size = size;
         if (gender) query.Gender = gender;
+
+        // --- ĐÃ THÊM 2 DÒNG NÀY ---
+        if (behavior) query.Behavior = behavior;
+        if (healthStatus) query.HealthStatus = healthStatus;
 
         const skip = (Math.max(1, page) - 1) * limit;
 
@@ -178,10 +183,14 @@ const petService = {
 
         const totalItems = await Pet.countDocuments(query);
 
-        // Trả về chuẩn phân trang
-        return formatPagination(formattedPets, totalItems, page, limit, 'pets');
+        return {
+            pets: formattedPets,
+            totalItems: totalItems,
+            totalPages: Math.ceil(totalItems / limit),
+            currentPage: page,
+            limit: limit
+        };
     },
-
     // 9. Admin Create Pet
     createAdminPetProcess: async (phone, petData) => {
         validateServiceData(petData);

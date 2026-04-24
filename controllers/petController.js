@@ -221,16 +221,20 @@ const petController = {
 
             const filters = {
                 phone: req.query.phone?.trim(),
-                status: toPascalCase(req.query.status?.trim()), // PascalCase
+                status: req.query.status?.trim(),
                 name: req.query.name?.trim(),
-                species: toPascalCase(req.query.species?.trim()), // PascalCase
+                species: req.query.species?.trim(),
                 breed: req.query.breed?.trim(),
                 size: req.query.size?.trim().toUpperCase(),
-                gender: toPascalCase(req.query.gender?.trim()) // PascalCase
+                gender: req.query.gender?.trim(),
+                // --- ĐÃ THÊM 2 TRƯỜNG NÀY ---
+                behavior: req.query.behavior?.trim(),
+                healthStatus: req.query.healthStatus?.trim()
             };
 
             const result = await petService.getAdminPetsProcess(page, limit, filters);
-            return sendSuccess(res, 200, "Lấy dữ liệu thành công", result.pets, result.meta);
+
+            return sendSuccess(res, 200, "Lấy dữ liệu thành công", result);
         } catch (error) {
             return handleError(res, error);
         }
