@@ -65,11 +65,19 @@ const petService = {
     },
 
     // 4. Get User Pets (Đã tối ưu bằng paginateQuery)
-    getUserPetsProcess: async (userId, page = 1, limit = 10) => {
-        const query = { UserID: userId, Status: 'Active' };
+    getUserPetsProcess: async (userId, page = 1, limit = 10, status = null) => {
+        const query = { UserID: userId };
+
+        // --- ĐÃ SỬA: Logic chặn Draft và Deleted nếu không truyền status ---
+        if (status) {
+            query.Status = { $in: status.split(',').map(s => toPascalCase(s.trim())) };
+        } else {
+            query.Status = { $nin: ['Draft', 'Deleted'] };
+        }
 
         return await paginateQuery(Pet, query, page, limit, {
-            select: '_id Name Species Breed Image Gender Size',
+            // Nên select thêm Status để FE biết hiện trạng của bé Pet
+            select: '_id Name Species Breed Image Gender Size Status',
             dataKey: 'pets'
         });
     },

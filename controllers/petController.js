@@ -155,10 +155,14 @@ const petController = {
     getUserPets: async (req, res) => {
         try {
             const userId = req.user.userId;
-            const page = Math.max(1, parseInt(req.query.page) || 1); // Bảo mật phân trang
+            const page = Math.max(1, parseInt(req.query.page) || 1);
             const limit = Math.min(parseInt(req.query.limit) || 10, 100);
 
-            const result = await petService.getUserPetsProcess(userId, page, limit);
+            // --- ĐÃ THÊM: Lấy thêm query status từ FE ---
+            const status = req.query.status?.trim();
+
+            // --- ĐÃ SỬA: Truyền thêm status xuống Service ---
+            const result = await petService.getUserPetsProcess(userId, page, limit, status);
 
             return sendSuccess(res, 200, "Lấy danh sách thú cưng thành công", result.pets, {
                 has_next_page: result.hasNextPage
